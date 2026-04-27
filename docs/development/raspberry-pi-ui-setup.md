@@ -388,6 +388,42 @@ cargo run --bin rune-ui-demo -- \
 
 If the image is upside down or mirrored, use `--rotate 270`.
 
+If the orientation is right but you see two stacked images, read the framebuffer
+geometry:
+
+```bash
+cat /sys/class/graphics/fb0/virtual_size
+cat /sys/class/graphics/fb0/stride 2>/dev/null || true
+cat /sys/class/graphics/fb0/bits_per_pixel
+```
+
+For a landscape `480,320` RGB565 framebuffer, try:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565 \
+  --rotate 90 \
+  --fb-width 480 \
+  --fb-height 320 \
+  --stride 960
+```
+
+For a portrait `320,480` RGB565 framebuffer, use:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565 \
+  --fb-width 320 \
+  --fb-height 480 \
+  --stride 640
+```
+
 Do not optimize the UI for the Pi's extra CPU. The Pi is a convenience target;
 the production device is a small ARM Linux system with a slow display.
 

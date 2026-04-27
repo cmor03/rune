@@ -77,6 +77,29 @@ cargo run --bin rune-ui-demo -- \
 
 If that is upside down or mirrored, try `--rotate 270`.
 
+If the orientation is correct but the image appears duplicated or stacked, the
+framebuffer stride or virtual size is different from the visible image. Inspect:
+
+```bash
+cat /sys/class/graphics/fb0/virtual_size
+cat /sys/class/graphics/fb0/stride 2>/dev/null || true
+cat /sys/class/graphics/fb0/bits_per_pixel
+```
+
+Then override geometry if needed:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565 \
+  --rotate 90 \
+  --fb-width 480 \
+  --fb-height 320 \
+  --stride 960
+```
+
 If `/dev/fb0` does not exist, probe the Pi display stack first:
 
 ```bash

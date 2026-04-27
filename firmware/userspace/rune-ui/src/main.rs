@@ -43,7 +43,10 @@ fn main() -> io::Result<()> {
         let transform = value_after(&args, "--rotate")
             .and_then(Transform::parse)
             .unwrap_or(Transform::None);
-        let mut sink = FbdevSink::open_with_transform(fb, format, transform)?;
+        let width = value_after(&args, "--fb-width").and_then(parse_usize);
+        let height = value_after(&args, "--fb-height").and_then(parse_usize);
+        let stride = value_after(&args, "--stride").and_then(parse_usize);
+        let mut sink = FbdevSink::open_configured(fb, format, transform, width, height, stride)?;
         for frame in 0..frames {
             let ctx = FrameContext::new(frame, frames);
             let canvas = render(screen, ctx);
@@ -77,7 +80,12 @@ fn serve(args: &[String], backend: &str, socket: &str) -> io::Result<()> {
         let transform = value_after(args, "--rotate")
             .and_then(Transform::parse)
             .unwrap_or(Transform::None);
-        Box::new(FbdevSink::open_with_transform(fb, format, transform)?)
+        let width = value_after(args, "--fb-width").and_then(parse_usize);
+        let height = value_after(args, "--fb-height").and_then(parse_usize);
+        let stride = value_after(args, "--stride").and_then(parse_usize);
+        Box::new(FbdevSink::open_configured(
+            fb, format, transform, width, height, stride,
+        )?)
     } else {
         let out_dir = value_after(args, "--out").unwrap_or("target/ui-frames");
         Box::new(PgmSink::new(out_dir)?)
@@ -141,4 +149,8 @@ fn value_after<'a>(args: &'a [String], key: &str) -> Option<&'a str> {
 
 fn has_flag(args: &[String], key: &str) -> bool {
     args.iter().any(|arg| arg == key)
+}
+
+fn parse_usize(value: &str) -> Option<usize> {
+    value.parse().ok()
 }

@@ -61,7 +61,6 @@ cargo run --bin rune-ui-demo -- \
   --format rgb565
 ```
 
-Use `--format xrgb8888` if the framebuffer is configured for 32-bit pixels.
 If the image appears split into repeated horizontal/side-by-side bands, Linux is
 probably exposing the LCD as landscape `480x320` while Rune is rendering
 portrait `320x480`. Try rotating the output:
@@ -71,8 +70,11 @@ cargo run --bin rune-ui-demo -- \
   --screen home \
   --backend fbdev \
   --fb /dev/fb0 \
-  --format rgb565 \
-  --rotate 90
+  --format xrgb8888 \
+  --rotate 90 \
+  --fb-width 480 \
+  --fb-height 320 \
+  --stride 1920
 ```
 
 If that is upside down or mirrored, try `--rotate 270`.
@@ -86,18 +88,19 @@ cat /sys/class/graphics/fb0/stride 2>/dev/null || true
 cat /sys/class/graphics/fb0/bits_per_pixel
 ```
 
-Then override geometry if needed:
+For the Inland TFT3.5 on the current Pi prototype, the probe usually reports
+`480,320`, `32` bpp, and stride `1920`. The matching command is:
 
 ```bash
 cargo run --bin rune-ui-demo -- \
   --screen home \
   --backend fbdev \
   --fb /dev/fb0 \
-  --format rgb565 \
+  --format xrgb8888 \
   --rotate 90 \
   --fb-width 480 \
   --fb-height 320 \
-  --stride 960
+  --stride 1920
 ```
 
 If `/dev/fb0` does not exist, probe the Pi display stack first:
@@ -133,6 +136,43 @@ cargo run --bin rune-ui-demo -- --send PHOLD
 
 `UP` and `DOWN` move launcher focus, `PRESS` opens or returns, and `PHOLD`
 jumps to the voice screen.
+
+## Fast Pi Deploy
+
+You do not need to commit and pull for every UI change. From your development
+machine, sync this crate directly to the Pi:
+
+```bash
+./scripts/pi-sync.sh
+```
+
+Sync, build on the Pi, install, and restart the UI service:
+
+```bash
+./scripts/pi-deploy.sh
+```
+
+Automatically redeploy whenever files change:
+
+```bash
+brew install fswatch
+./scripts/pi-watch.sh
+```
+
+Defaults:
+
+```text
+RUNE_PI_HOST=user1@rune-proto1
+RUNE_PI_DIR=/home/user1/src/rune/firmware/userspace/rune-ui
+RUNE_PI_BIN=/usr/local/bin/rune-ui
+RUNE_PI_SERVICE=rune-ui.service
+```
+
+Override them inline when needed:
+
+```bash
+RUNE_PI_HOST=user1@192.168.1.42 ./scripts/pi-deploy.sh
+```
 
 ## Boot Service
 

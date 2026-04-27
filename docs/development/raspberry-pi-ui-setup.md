@@ -397,18 +397,18 @@ cat /sys/class/graphics/fb0/stride 2>/dev/null || true
 cat /sys/class/graphics/fb0/bits_per_pixel
 ```
 
-For a landscape `480,320` RGB565 framebuffer, try:
+For a landscape `480,320` framebuffer at 32 bits per pixel, try:
 
 ```bash
 cargo run --bin rune-ui-demo -- \
   --screen home \
   --backend fbdev \
   --fb /dev/fb0 \
-  --format rgb565 \
+  --format xrgb8888 \
   --rotate 90 \
   --fb-width 480 \
   --fb-height 320 \
-  --stride 960
+  --stride 1920
 ```
 
 For a portrait `320,480` RGB565 framebuffer, use:
@@ -871,7 +871,7 @@ Wants=network-online.target
 
 [Service]
 Environment=RUNE_CONFIG=/etc/rune/rune.toml
-ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --rotate 90 --socket /tmp/rune-ui.sock
+ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format xrgb8888 --rotate 90 --fb-width 480 --fb-height 320 --stride 1920 --socket /tmp/rune-ui.sock
 Restart=on-failure
 RestartSec=2
 
@@ -920,26 +920,45 @@ These commands map to the intended physical controls:
 
 ## Part 13: Fast Iteration Loop
 
-From your development machine:
+You do not need to commit and pull for every UI change. The fast loop is direct
+sync from your development machine to the Pi.
+
+From `firmware/userspace/rune-ui` on your development machine:
 
 ```bash
-cargo build --release
-scp target/release/rune-ui-demo pi@rune-pi.local:/tmp/rune-ui
-ssh pi@rune-pi.local \
-  'sudo install -m 0755 /tmp/rune-ui /usr/local/bin/rune-ui && sudo systemctl restart rune-ui'
+./scripts/pi-deploy.sh
 ```
 
-For asset and config changes:
+That script:
 
-```bash
-rsync -az assets/ pi@rune-pi.local:/var/lib/rune/assets/
-ssh pi@rune-pi.local 'sudo systemctl restart rune-ui'
+1. Uses `rsync` to copy the UI crate to the Pi.
+2. Runs `cargo build --release` on the Pi.
+3. Installs `rune-ui` to `/usr/local/bin/rune-ui`.
+4. Restarts `rune-ui.service`.
+
+The default target is:
+
+```text
+user1@rune-proto1:/home/user1/src/rune/firmware/userspace/rune-ui
 ```
 
-For development logs:
+Override it when needed:
 
 ```bash
-ssh pi@rune-pi.local 'journalctl -u rune-ui.service -n 100 --no-pager'
+RUNE_PI_HOST=user1@192.168.1.42 ./scripts/pi-deploy.sh
+```
+
+For continuous sync on save, install `fswatch` on the development machine:
+
+```bash
+brew install fswatch
+./scripts/pi-watch.sh
+```
+
+For logs:
+
+```bash
+ssh user1@rune-proto1 'journalctl -u rune-ui.service -n 100 --no-pager'
 ```
 
 This is the same mental loop as the T113 prototype: build, copy, restart, look

@@ -808,7 +808,6 @@ Create data directory:
 
 ```bash
 sudo mkdir -p /var/lib/rune
-sudo chown rune:rune /var/lib/rune
 ```
 
 Example service file:
@@ -821,9 +820,6 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=rune
-Group=rune
-SupplementaryGroups=audio video gpio spi i2c
 Environment=RUNE_CONFIG=/etc/rune/rune.toml
 ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --socket /tmp/rune-ui.sock
 Restart=on-failure
@@ -848,9 +844,9 @@ Check logs:
 journalctl -u rune-ui.service -f
 ```
 
-During early bring-up, `rune-ui` can be the mock renderer installed under the
-production service name. The point is to establish the same deployment shape the
-real device will use.
+During early bring-up, this service runs as root so it can open framebuffer and
+device files without fighting Linux permissions. Once the UI path is stable, add
+a dedicated `rune` user and narrow device access.
 
 Send simulated wheel/button input from the shell:
 

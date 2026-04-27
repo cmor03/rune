@@ -2,10 +2,10 @@
 
 use crate::font;
 
-/// Rune display width in pixels.
-pub const WIDTH: usize = 480;
-/// Rune display height in pixels.
-pub const HEIGHT: usize = 280;
+/// Prototype portrait LCD width in pixels.
+pub const WIDTH: usize = 320;
+/// Prototype portrait LCD height in pixels.
+pub const HEIGHT: usize = 480;
 
 /// A grayscale color.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -1,6 +1,6 @@
 //! Animation timing helpers and pixel sprite data.
 
-use crate::canvas::{Canvas, Color, Rect};
+use crate::canvas::{Canvas, Color, Rect, WIDTH};
 
 /// Render-time animation context.
 #[derive(Clone, Copy, Debug)]
@@ -11,6 +11,8 @@ pub struct FrameContext {
     pub total: u32,
     /// Battery percentage.
     pub battery_pct: u8,
+    /// Current launcher selection.
+    pub selected: usize,
 }
 
 impl FrameContext {
@@ -20,7 +22,14 @@ impl FrameContext {
             frame,
             total,
             battery_pct: 81,
+            selected: 0,
         }
+    }
+
+    /// Returns a copy with a launcher selection.
+    pub const fn with_selected(mut self, selected: usize) -> Self {
+        self.selected = selected;
+        self
     }
 
     /// Returns a triangle wave in the range 0..=amplitude.
@@ -95,14 +104,14 @@ pub fn raven(canvas: &mut Canvas, x: i32, y: i32, scale: i32, ctx: FrameContext,
 pub fn raven_wake(canvas: &mut Canvas, ctx: FrameContext, color: Color) {
     let total = ctx.total.max(1);
     let progress = ctx.frame.min(total) as i32;
-    let x = -60 + progress * 620 / total as i32;
+    let x = -60 + progress * (WIDTH as i32 + 140) / total as i32;
     let hop = if ctx.frame > total.saturating_sub(8) {
         -((ctx.frame - total.saturating_sub(8)) as i32 * 7)
     } else {
         -ctx.pulse(12, 14)
     };
-    canvas.line(0, 212, 480, 212, Color(48));
-    raven(canvas, x, 184 + hop, 4, ctx, color);
+    canvas.line(0, 280, WIDTH as i32, 280, Color(48));
+    raven(canvas, x, 252 + hop, 4, ctx, color);
 
     for i in 0..6 {
         let fx = x - 16 - i * 28;

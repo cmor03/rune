@@ -17,8 +17,8 @@ One process, multiple internal modules, async event loop. No separate daemons or
 For early UI work before Rune dev hardware is ready, use the [Raspberry Pi UI Setup](../../docs/development/raspberry-pi-ui-setup.md). It keeps the UI on Linux interfaces that can move from Pi to T113: framebuffer/DRM, spidev, evdev/GPIO, ALSA, and V4L2.
 
 The first portable UI renderer lives in [rune-ui](rune-ui/). It renders a fixed
-480x280 grayscale framebuffer and includes initial screens plus wake, voice, and
-camera animation states.
+320x480 grayscale framebuffer for the current portrait LCD prototype and
+includes initial screens plus wake, voice, and camera animation states.
 
 ## Current status
 

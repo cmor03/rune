@@ -49,7 +49,7 @@ Useful for UI bring-up:
 - Logic analyzer for SPI/GPIO debugging
 
 The Pi 5 is faster and has better I/O headroom. The Pi 4 is still completely
-adequate for UI mocking because Rune's real display is only 480x280 and should
+adequate for UI mocking because Rune's real display is only 320x480 and should
 not be animation-heavy.
 
 ---
@@ -58,7 +58,7 @@ not be animation-heavy.
 
 Follow these rules while prototyping on the Pi:
 
-- Render into a fixed 480x280 canvas even if the Pi is connected to HDMI.
+- Render into a fixed 320x480 canvas even if the Pi is connected to HDMI.
 - Keep display output behind a backend interface:
   - `png` for screenshot tests on a dev machine
   - `drm` or `fbdev` for Pi HDMI/fullscreen preview
@@ -78,7 +78,7 @@ Good architecture for the UI layer:
 Rune app logic
      |
      v
-480x280 UI scene / framebuffer
+320x480 UI scene / framebuffer
      |
      +--> PNG backend for screenshots
      +--> DRM/fbdev backend for Pi HDMI
@@ -204,6 +204,45 @@ The stock Raspberry Pi kernel is fine for this setup. Building a custom kernel
 is not useful until you need a specific display driver or low-level timing
 change. For now, keep the kernel boring and make the UI portable.
 
+### Make It Boot Like an Appliance
+
+Do this before trying to rebuild or strip the kernel. The big wins come from
+removing desktop/session services and starting only the Rune UI service.
+
+Set console boot:
+
+```bash
+sudo systemctl set-default multi-user.target
+```
+
+Disable services that are useful on a general Pi but not needed for the UI
+prototype:
+
+```bash
+sudo systemctl disable --now bluetooth.service 2>/dev/null || true
+sudo systemctl disable --now hciuart.service 2>/dev/null || true
+sudo systemctl disable --now avahi-daemon.service 2>/dev/null || true
+sudo systemctl disable --now triggerhappy.service 2>/dev/null || true
+```
+
+Keep SSH enabled while developing:
+
+```bash
+sudo systemctl enable --now ssh
+```
+
+Optional boot quieting, once SSH works reliably:
+
+```bash
+sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.rune-backup
+sudo sed -i 's/ quiet//g' /boot/firmware/cmdline.txt
+sudo sed -i 's/$/ quiet loglevel=3 vt.global_cursor_default=0/' /boot/firmware/cmdline.txt
+```
+
+Do not remove networking yet. You need SSH for iteration and command injection.
+Once the UI is stable, Buildroot is the right place to produce a truly minimal
+root filesystem for the final board.
+
 ---
 
 ## Part 4: Enable Interfaces
@@ -325,13 +364,13 @@ cargo run --bin rune-ui-demo -- --screen home --out target/ui-home
 cargo run --bin rune-ui-demo -- --screen wake --frames 24 --out target/ui-wake
 ```
 
-If your LCD appears as `/dev/fb1`, try writing one frame directly:
+If your LCD appears as `/dev/fb0`, try writing one frame directly:
 
 ```bash
 cargo run --bin rune-ui-demo -- \
   --screen home \
   --backend fbdev \
-  --fb /dev/fb1 \
+  --fb /dev/fb0 \
   --format rgb565
 ```
 
@@ -362,7 +401,7 @@ For a GPIO-header LCD that appears as a Linux framebuffer, the current direct
 test path is:
 
 ```bash
-rune-ui-demo --backend fbdev --fb /dev/fb1
+rune-ui-demo --backend fbdev --fb /dev/fb0
 ```
 
 For a GPIO-header LCD that appears as a DRM device, the future command should
@@ -382,7 +421,7 @@ Recommended module split:
 ```text
 firmware/userspace/
   src/
-    ui/              # Layout, screens, typography, 480x280 canvas
+    ui/              # Layout, screens, typography, 320x480 canvas
     input/           # Buttons, encoder, keyboard test adapter
     display/
       mod.rs         # DisplayBackend trait
@@ -426,8 +465,8 @@ open rune-frame.png
 ```
 
 For fullscreen preview, the eventual app should open DRM directly and scale the
-480x280 Rune canvas to the connected HDMI mode. Scaling is only for preview.
-Layout decisions should still be made at 480x280.
+320x480 Rune canvas to the connected HDMI mode. Scaling is only for preview.
+Layout decisions should still be made at 320x480.
 
 ---
 
@@ -437,11 +476,11 @@ If your screen is connected directly to the Pi's GPIO header, identify what kind
 of screen it is before writing any Rune code for it. The connector does not tell
 you the software path; the controller and transport do.
 
-If `rune-ui-demo --backend fbdev --fb /dev/fb1 ...` returns `No such file or
-directory`, the renderer is working but Linux has not exposed `/dev/fb1`. That
+If `rune-ui-demo --backend fbdev --fb /dev/fb0 ...` returns `No such file or
+directory`, the renderer is working but Linux has not exposed `/dev/fb0`. That
 usually means one of three things:
 
-- The LCD is exposed as a different framebuffer, often `/dev/fb0`.
+- The LCD is exposed as a different framebuffer, often `/dev/fb1`.
 - The LCD is exposed through DRM/KMS under `/dev/dri/` instead of fbdev.
 - The LCD driver/overlay is not loaded, so Linux does not know the screen exists.
 
@@ -449,7 +488,7 @@ Common possibilities:
 
 | Screen type | Typical Linux surface | Rune backend to use |
 |-------------|-----------------------|---------------------|
-| SPI TFT HAT | `/dev/fb1` through a kernel overlay, or `/dev/spidev0.0` if driven directly | `fbdev` first, direct `spidev` only if needed |
+| SPI TFT HAT | `/dev/fb0` through a kernel overlay, or `/dev/spidev0.0` if driven directly | `fbdev` first, direct `spidev` only if needed |
 | DPI parallel display | `/dev/dri/card*` or `/dev/fb0` after a device-tree overlay | `drm` or `fbdev` |
 | DSI ribbon display | `/dev/dri/card*` | `drm` |
 
@@ -493,14 +532,98 @@ identifiers look like `ILI9341`, `ST7789`, `GC9A01`, `HX8357`, `ILI9486`, or a
 Waveshare SKU. Two LCDs can use the same 40-pin Pi header and require completely
 different drivers.
 
-If the screen exposes a framebuffer such as `/dev/fb1`, test it without Rune:
+### Inland TFT3.5 Touch Shield
+
+The Inland TFT3.5 Touch Shield sold for Raspberry Pi is a 3.5" 480x320 SPI TFT
+with a resistive touch overlay. It is commonly compatible with the ILI9486 LCD
+and XPT2046 touch-controller family.
+
+If the screen lights up white but `ls -l /dev/fb*` shows no framebuffer device,
+the Pi sees SPI but has not loaded an LCD driver. Start with the in-kernel
+overlay path because it is reversible and does not run a vendor install script:
+
+```bash
+sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.rune-backup
+sudo tee -a /boot/firmware/config.txt >/dev/null <<'EOF'
+
+# Inland TFT3.5 / PiScreen-style SPI LCD test
+dtoverlay=piscreen,speed=18000000,drm,rotate=270
+EOF
+sudo reboot
+```
+
+After reboot:
+
+```bash
+ls -l /dev/fb* 2>/dev/null || echo "no fbdev devices"
+ls -l /dev/dri/ 2>/dev/null || echo "no DRM devices"
+dmesg | grep -Ei 'piscreen|ili|st77|drm|fb|spi|panel|lcd' | tail -120
+```
+
+If a framebuffer appears, try Rune:
+
+```bash
+cd ~/src/rune/firmware/userspace/rune-ui
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565
+```
+
+The Rune UI mock is portrait `320x480`. The Inland panel is physically
+`480x320`, so the overlay must rotate the LCD into portrait. If the image is
+sideways or split into repeated horizontal bands, edit the overlay line and try
+the other portrait rotation:
+
+```text
+dtoverlay=piscreen,speed=18000000,drm,rotate=90
+```
+
+Then reboot and check:
+
+```bash
+cat /sys/class/graphics/fb0/virtual_size 2>/dev/null || true
+```
+
+The value should be `320,480` for the current Rune LCD prototype path. If it is
+`480,320`, Linux is still exposing the LCD in landscape.
+
+If no framebuffer appears but DRM reports an active connector, the next Rune
+step is a DRM backend rather than fbdev.
+
+If the `piscreen` overlay does not work, restore the backup before trying a
+vendor driver:
+
+```bash
+sudo cp /boot/firmware/config.txt.rune-backup /boot/firmware/config.txt
+sudo reboot
+```
+
+The vendor-supported path for this display family is usually the GoodTFT
+`LCD-show` scripts:
+
+```bash
+cd ~
+sudo rm -rf LCD-show
+git clone https://github.com/goodtft/LCD-show.git
+chmod -R 755 LCD-show
+cd LCD-show
+sudo ./MHS35-show
+```
+
+Treat this as a fallback. Those scripts can rewrite boot configuration and may
+disable or reroute HDMI output. Keep SSH access working and keep the
+`config.txt.rune-backup` file so you can recover quickly.
+
+If the screen exposes a framebuffer such as `/dev/fb0`, test it without Rune:
 
 ```bash
 sudo apt install -y fbi
-convert -size 480x280 xc:white \
+convert -size 320x480 xc:white \
   -fill black -pointsize 28 -gravity center \
   -annotate 0 'Rune framebuffer test' /tmp/rune-fb-test.png
-sudo fbi -T 1 -d /dev/fb1 --noverbose /tmp/rune-fb-test.png
+sudo fbi -T 1 -d /dev/fb0 --noverbose /tmp/rune-fb-test.png
 ```
 
 If you only see `/dev/fb0`, inspect it before writing to it:
@@ -546,7 +669,7 @@ For a TFT-style screen, set Rune's config to the attached framebuffer:
 width = 480
 height = 280
 backend = "fbdev"
-device = "/dev/fb1"
+device = "/dev/fb0"
 scale = "fit"
 rotate = 0
 ```
@@ -566,7 +689,7 @@ backlight_gpio = 18
 ```
 
 If your mock UI already exists, import it at the UI layer, not the display
-driver layer. The first conversion target should be a 480x280 PNG screenshot.
+driver layer. The first conversion target should be a 320x480 PNG screenshot.
 Once the screen states look right as PNGs, route the same frame through the Pi
 screen backend.
 
@@ -702,7 +825,7 @@ User=rune
 Group=rune
 SupplementaryGroups=audio video gpio spi i2c
 Environment=RUNE_CONFIG=/etc/rune/rune.toml
-ExecStart=/usr/local/bin/rune-ui --screen home --backend fbdev --fb /dev/fb1 --format rgb565
+ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --socket /tmp/rune-ui.sock
 Restart=on-failure
 RestartSec=2
 
@@ -728,6 +851,24 @@ journalctl -u rune-ui.service -f
 During early bring-up, `rune-ui` can be the mock renderer installed under the
 production service name. The point is to establish the same deployment shape the
 real device will use.
+
+Send simulated wheel/button input from the shell:
+
+```bash
+rune-ui --send UP --socket /tmp/rune-ui.sock
+rune-ui --send DOWN --socket /tmp/rune-ui.sock
+rune-ui --send PRESS --socket /tmp/rune-ui.sock
+rune-ui --send PHOLD --socket /tmp/rune-ui.sock
+```
+
+These commands map to the intended physical controls:
+
+| Command | Meaning |
+|---------|---------|
+| `UP` | Scroll wheel up |
+| `DOWN` | Scroll wheel down |
+| `PRESS` | Short press |
+| `PHOLD` | Press and hold |
 
 ---
 
@@ -764,7 +905,7 @@ at the display, repeat.
 
 Should port cleanly:
 
-- 480x280 UI layout
+- 320x480 UI layout
 - Screen state machine
 - Button/encoder semantics
 - PNG screenshot tests
@@ -797,7 +938,7 @@ board before claiming timing, battery life, or display refresh performance.
 - [ ] Audio input/output is visible through ALSA.
 - [ ] USB camera appears through V4L2.
 - [ ] Rune repo is present on the Pi.
-- [ ] UI can render a 480x280 PNG frame.
+- [ ] UI can render a 320x480 PNG frame.
 - [ ] Direct header-connected LCD is identified as `fbdev`, `drm`, or direct `spidev`.
 - [ ] UI can run under a service manager.
 - [ ] Keyboard input can drive the UI state machine.

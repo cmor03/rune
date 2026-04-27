@@ -1,6 +1,6 @@
 //! Portable Rune UI renderer.
 //!
-//! This crate deliberately renders into a plain 480x280 grayscale framebuffer.
+//! This crate deliberately renders into a plain 320x480 grayscale framebuffer.
 //! The same output can be saved as an image, copied to a Raspberry Pi LCD
 //! framebuffer, or converted into the byte layout required by the final e-ink
 //! panel.

@@ -43,7 +43,7 @@ pub struct FbdevSink {
 }
 
 impl FbdevSink {
-    /// Opens a framebuffer device such as `/dev/fb1`.
+    /// Opens a framebuffer device such as `/dev/fb0`.
     pub fn open(path: impl AsRef<Path>, format: PixelFormat) -> io::Result<Self> {
         let path = path.as_ref();
         let file = OpenOptions::new().write(true).open(path).map_err(|err| {

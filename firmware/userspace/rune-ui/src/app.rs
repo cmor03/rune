@@ -26,6 +26,91 @@ pub enum Screen {
     Camera,
 }
 
+/// Simulated wheel/button input.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Command {
+    /// Wheel up.
+    Up,
+    /// Wheel down.
+    Down,
+    /// Short press.
+    Press,
+    /// Press and hold.
+    PressHold,
+}
+
+impl Command {
+    /// Parses a command string.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_uppercase().as_str() {
+            "UP" => Some(Self::Up),
+            "DOWN" => Some(Self::Down),
+            "PRESS" => Some(Self::Press),
+            "PHOLD" | "PRESS_HOLD" | "PRESSHOLD" => Some(Self::PressHold),
+            _ => None,
+        }
+    }
+}
+
+/// Stateful UI model used by the command loop.
+#[derive(Clone, Debug)]
+pub struct UiState {
+    /// Current screen.
+    pub screen: Screen,
+    /// Home launcher selected tile.
+    pub selected: usize,
+}
+
+impl UiState {
+    /// Creates the initial UI state.
+    pub const fn new() -> Self {
+        Self {
+            screen: Screen::Home,
+            selected: 0,
+        }
+    }
+
+    /// Applies one command.
+    pub fn apply(&mut self, command: Command) {
+        match command {
+            Command::Up => {
+                if self.screen == Screen::Home {
+                    self.selected = self.selected.saturating_sub(1);
+                }
+            }
+            Command::Down => {
+                if self.screen == Screen::Home {
+                    self.selected = (self.selected + 1).min(4);
+                }
+            }
+            Command::Press => {
+                self.screen = if self.screen == Screen::Home {
+                    HOME_SCREENS[self.selected]
+                } else {
+                    Screen::Home
+                };
+            }
+            Command::PressHold => {
+                self.screen = Screen::Voice;
+            }
+        }
+    }
+}
+
+const HOME_SCREENS: [Screen; 5] = [
+    Screen::Voice,
+    Screen::Reader,
+    Screen::Music,
+    Screen::Notifications,
+    Screen::Camera,
+];
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Screen {
     /// Parses a screen name.
     pub fn parse(value: &str) -> Option<Self> {
@@ -72,4 +157,9 @@ pub fn render(screen: Screen, ctx: FrameContext) -> Canvas {
     }
     canvas.surface_texture(2);
     canvas
+}
+
+/// Renders one frame from state.
+pub fn render_state(state: &UiState, ctx: FrameContext) -> Canvas {
+    render(state.screen, ctx.with_selected(state.selected))
 }

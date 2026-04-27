@@ -1,0 +1,15 @@
+[Unit]
+Description=Rune UI prototype
+After=local-fs.target
+
+[Service]
+User=rune
+Group=rune
+SupplementaryGroups=audio video gpio spi i2c
+Environment=RUNE_CONFIG=/etc/rune/rune.toml
+ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --socket /tmp/rune-ui.sock
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

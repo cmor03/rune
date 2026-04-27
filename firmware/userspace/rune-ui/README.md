@@ -1,7 +1,7 @@
 # Rune UI Renderer
 
 This is the first portable Rune UI implementation. It is intentionally not a
-web app. It renders Rune screens into a fixed 480x280 grayscale framebuffer so
+web app. It renders Rune screens into a fixed 320x480 grayscale framebuffer so
 the same UI can run in three places:
 
 - On a development machine as image files
@@ -51,19 +51,19 @@ macOS, Preview can open `.pgm`; ImageMagick can convert them:
 magick target/wake/wake-000.pgm wake-000.png
 ```
 
-Write a single frame to a Raspberry Pi LCD exposed as `/dev/fb1`:
+Write a single frame to a Raspberry Pi LCD exposed as `/dev/fb0`:
 
 ```bash
 cargo run --bin rune-ui-demo -- \
   --screen home \
   --backend fbdev \
-  --fb /dev/fb1 \
+  --fb /dev/fb0 \
   --format rgb565
 ```
 
 Use `--format xrgb8888` if the framebuffer is configured for 32-bit pixels.
 
-If `/dev/fb1` does not exist, probe the Pi display stack first:
+If `/dev/fb0` does not exist, probe the Pi display stack first:
 
 ```bash
 ./scripts/pi-display-probe.sh
@@ -71,6 +71,47 @@ If `/dev/fb1` does not exist, probe the Pi display stack first:
 
 The fbdev backend only works after the LCD has been registered by Linux as a
 framebuffer device.
+
+## Command Loop
+
+Run the UI continuously:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --serve \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565
+```
+
+Send wheel/button commands from another shell:
+
+```bash
+cargo run --bin rune-ui-demo -- --send UP
+cargo run --bin rune-ui-demo -- --send DOWN
+cargo run --bin rune-ui-demo -- --send PRESS
+cargo run --bin rune-ui-demo -- --send PHOLD
+```
+
+`UP` and `DOWN` move launcher focus, `PRESS` opens or returns, and `PHOLD`
+jumps to the voice screen.
+
+## Boot Service
+
+Install the prototype service on the Pi:
+
+```bash
+sudo install -m 0755 target/release/rune-ui-demo /usr/local/bin/rune-ui
+sudo cp systemd/rune-ui.service /etc/systemd/system/rune-ui.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now rune-ui.service
+```
+
+View logs:
+
+```bash
+journalctl -u rune-ui.service -f
+```
 
 Animation timing notes are in [ANIMATION.md](ANIMATION.md).
 
@@ -86,7 +127,7 @@ The UI code should stay split like this:
 The next backend to improve for the Raspberry Pi LCD is likely one of:
 
 - `fbdev`: detect dimensions, line length, and pixel format instead of requiring flags
-- `drm`: draw the 480x280 canvas to a KMS plane
+- `drm`: draw the 320x480 canvas to a KMS plane
 - `lcd-spi`: direct SPI LCD driver only if the LCD does not expose framebuffer
   or DRM devices
 

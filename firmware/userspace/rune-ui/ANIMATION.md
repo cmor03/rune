@@ -6,7 +6,7 @@ experiments. Every animation should degrade to a static frame cleanly.
 
 ## Frame Model
 
-- Canvas: 480x280 grayscale
+- Canvas: 320x480 grayscale
 - Default preview rate: 12 fps
 - E-ink target rate: event-based, not continuous
 - Animation input: `FrameContext { frame, total, battery_pct }`

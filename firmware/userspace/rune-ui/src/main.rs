@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use rune_ui::animation::FrameContext;
 use rune_ui::app::{render_state, Command, UiState};
-use rune_ui::display::{FbdevSink, FrameSink, PgmSink, PixelFormat};
+use rune_ui::display::{FbdevSink, FrameSink, PgmSink, PixelFormat, Transform};
 use rune_ui::{render, Screen};
 
 fn main() -> io::Result<()> {
@@ -40,7 +40,10 @@ fn main() -> io::Result<()> {
         let format = value_after(&args, "--format")
             .and_then(PixelFormat::parse)
             .unwrap_or(PixelFormat::Rgb565);
-        let mut sink = FbdevSink::open(fb, format)?;
+        let transform = value_after(&args, "--rotate")
+            .and_then(Transform::parse)
+            .unwrap_or(Transform::None);
+        let mut sink = FbdevSink::open_with_transform(fb, format, transform)?;
         for frame in 0..frames {
             let ctx = FrameContext::new(frame, frames);
             let canvas = render(screen, ctx);
@@ -71,7 +74,10 @@ fn serve(args: &[String], backend: &str, socket: &str) -> io::Result<()> {
         let format = value_after(args, "--format")
             .and_then(PixelFormat::parse)
             .unwrap_or(PixelFormat::Rgb565);
-        Box::new(FbdevSink::open(fb, format)?)
+        let transform = value_after(args, "--rotate")
+            .and_then(Transform::parse)
+            .unwrap_or(Transform::None);
+        Box::new(FbdevSink::open_with_transform(fb, format, transform)?)
     } else {
         let out_dir = value_after(args, "--out").unwrap_or("target/ui-frames");
         Box::new(PgmSink::new(out_dir)?)

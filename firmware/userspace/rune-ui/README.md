@@ -62,6 +62,20 @@ cargo run --bin rune-ui-demo -- \
 ```
 
 Use `--format xrgb8888` if the framebuffer is configured for 32-bit pixels.
+If the image appears split into repeated horizontal/side-by-side bands, Linux is
+probably exposing the LCD as landscape `480x320` while Rune is rendering
+portrait `320x480`. Try rotating the output:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565 \
+  --rotate 90
+```
+
+If that is upside down or mirrored, try `--rotate 270`.
 
 If `/dev/fb0` does not exist, probe the Pi display stack first:
 
@@ -81,7 +95,8 @@ cargo run --bin rune-ui-demo -- \
   --serve \
   --backend fbdev \
   --fb /dev/fb0 \
-  --format rgb565
+  --format rgb565 \
+  --rotate 90
 ```
 
 Send wheel/button commands from another shell:

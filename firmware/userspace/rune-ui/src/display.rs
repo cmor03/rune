@@ -22,6 +22,29 @@ pub enum PixelFormat {
     Xrgb8888,
 }
 
+/// Orientation transform applied while writing to the framebuffer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Transform {
+    /// Write the canvas as-is.
+    None,
+    /// Rotate the portrait canvas clockwise into a landscape framebuffer.
+    Rotate90,
+    /// Rotate the portrait canvas counter-clockwise into a landscape framebuffer.
+    Rotate270,
+}
+
+impl Transform {
+    /// Parses a transform name.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "0" | "none" => Some(Self::None),
+            "90" | "rotate90" => Some(Self::Rotate90),
+            "270" | "rotate270" => Some(Self::Rotate270),
+            _ => None,
+        }
+    }
+}
+
 impl PixelFormat {
     /// Parses a pixel format name.
     pub fn parse(value: &str) -> Option<Self> {
@@ -40,11 +63,21 @@ impl PixelFormat {
 pub struct FbdevSink {
     file: File,
     format: PixelFormat,
+    transform: Transform,
 }
 
 impl FbdevSink {
     /// Opens a framebuffer device such as `/dev/fb0`.
     pub fn open(path: impl AsRef<Path>, format: PixelFormat) -> io::Result<Self> {
+        Self::open_with_transform(path, format, Transform::None)
+    }
+
+    /// Opens a framebuffer device with an output transform.
+    pub fn open_with_transform(
+        path: impl AsRef<Path>,
+        format: PixelFormat,
+        transform: Transform,
+    ) -> io::Result<Self> {
         let path = path.as_ref();
         let file = OpenOptions::new().write(true).open(path).map_err(|err| {
             io::Error::new(
@@ -56,7 +89,11 @@ Check `ls -l /dev/fb*` on the Pi; your LCD may be exposed as a different fbdev, 
                 ),
             )
         })?;
-        Ok(Self { file, format })
+        Ok(Self {
+            file,
+            format,
+            transform,
+        })
     }
 }
 
@@ -71,8 +108,8 @@ impl FrameSink for FbdevSink {
         match self.format {
             PixelFormat::Rgb565 => {
                 let mut out = Vec::with_capacity(WIDTH * HEIGHT * 2);
-                for px in canvas.pixels() {
-                    let v = *px as u16;
+                for px in transformed_pixels(canvas, self.transform) {
+                    let v = px as u16;
                     let r = (v >> 3) & 0x1f;
                     let g = (v >> 2) & 0x3f;
                     let b = (v >> 3) & 0x1f;
@@ -83,8 +120,8 @@ impl FrameSink for FbdevSink {
             }
             PixelFormat::Xrgb8888 => {
                 let mut out = Vec::with_capacity(WIDTH * HEIGHT * 4);
-                for px in canvas.pixels() {
-                    out.extend_from_slice(&[*px, *px, *px, 0x00]);
+                for px in transformed_pixels(canvas, self.transform) {
+                    out.extend_from_slice(&[px, px, px, 0x00]);
                 }
                 self.file.write_all(&out)
             }
@@ -119,6 +156,34 @@ impl FrameSink for PgmSink {
         let mut file = File::create(path)?;
         write!(file, "P5\n{} {}\n255\n", WIDTH, HEIGHT)?;
         file.write_all(canvas.pixels())
+    }
+}
+
+fn transformed_pixels(canvas: &Canvas, transform: Transform) -> Vec<u8> {
+    match transform {
+        Transform::None => canvas.pixels().to_vec(),
+        Transform::Rotate90 => {
+            let mut out = Vec::with_capacity(WIDTH * HEIGHT);
+            for dy in 0..WIDTH {
+                for dx in 0..HEIGHT {
+                    let sx = dy;
+                    let sy = HEIGHT - 1 - dx;
+                    out.push(canvas.pixels()[sy * WIDTH + sx]);
+                }
+            }
+            out
+        }
+        Transform::Rotate270 => {
+            let mut out = Vec::with_capacity(WIDTH * HEIGHT);
+            for dy in 0..WIDTH {
+                for dx in 0..HEIGHT {
+                    let sx = WIDTH - 1 - dy;
+                    let sy = dx;
+                    out.push(canvas.pixels()[sy * WIDTH + sx]);
+                }
+            }
+            out
+        }
     }
 }
 

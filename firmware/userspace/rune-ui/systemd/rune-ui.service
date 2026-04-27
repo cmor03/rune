@@ -4,7 +4,7 @@ After=local-fs.target
 
 [Service]
 Environment=RUNE_CONFIG=/etc/rune/rune.toml
-ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --socket /tmp/rune-ui.sock
+ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --rotate 90 --socket /tmp/rune-ui.sock
 Restart=on-failure
 RestartSec=2
 

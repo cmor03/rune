@@ -374,6 +374,20 @@ cargo run --bin rune-ui-demo -- \
   --format rgb565
 ```
 
+If the output appears as repeated side-by-side slices, the framebuffer is
+landscape while Rune is rendering portrait. Rotate the framebuffer output:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565 \
+  --rotate 90
+```
+
+If the image is upside down or mirrored, use `--rotate 270`.
+
 Do not optimize the UI for the Pi's extra CPU. The Pi is a convenience target;
 the production device is a small ARM Linux system with a slow display.
 
@@ -821,7 +835,7 @@ Wants=network-online.target
 
 [Service]
 Environment=RUNE_CONFIG=/etc/rune/rune.toml
-ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --socket /tmp/rune-ui.sock
+ExecStart=/usr/local/bin/rune-ui --serve --backend fbdev --fb /dev/fb0 --format rgb565 --rotate 90 --socket /tmp/rune-ui.sock
 Restart=on-failure
 RestartSec=2
 

@@ -45,7 +45,17 @@ pub struct FbdevSink {
 impl FbdevSink {
     /// Opens a framebuffer device such as `/dev/fb1`.
     pub fn open(path: impl AsRef<Path>, format: PixelFormat) -> io::Result<Self> {
-        let file = OpenOptions::new().write(true).open(path)?;
+        let path = path.as_ref();
+        let file = OpenOptions::new().write(true).open(path).map_err(|err| {
+            io::Error::new(
+                err.kind(),
+                format!(
+                    "could not open framebuffer device '{}': {err}. \
+Check `ls -l /dev/fb*` on the Pi; your LCD may be exposed as a different fbdev, as DRM, or not registered by a kernel overlay yet.",
+                    path.display()
+                ),
+            )
+        })?;
         Ok(Self { file, format })
     }
 }

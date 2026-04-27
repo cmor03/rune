@@ -63,6 +63,15 @@ cargo run --bin rune-ui-demo -- \
 
 Use `--format xrgb8888` if the framebuffer is configured for 32-bit pixels.
 
+If `/dev/fb1` does not exist, probe the Pi display stack first:
+
+```bash
+./scripts/pi-display-probe.sh
+```
+
+The fbdev backend only works after the LCD has been registered by Linux as a
+framebuffer device.
+
 Animation timing notes are in [ANIMATION.md](ANIMATION.md).
 
 ## Porting Plan

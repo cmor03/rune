@@ -437,6 +437,14 @@ If your screen is connected directly to the Pi's GPIO header, identify what kind
 of screen it is before writing any Rune code for it. The connector does not tell
 you the software path; the controller and transport do.
 
+If `rune-ui-demo --backend fbdev --fb /dev/fb1 ...` returns `No such file or
+directory`, the renderer is working but Linux has not exposed `/dev/fb1`. That
+usually means one of three things:
+
+- The LCD is exposed as a different framebuffer, often `/dev/fb0`.
+- The LCD is exposed through DRM/KMS under `/dev/dri/` instead of fbdev.
+- The LCD driver/overlay is not loaded, so Linux does not know the screen exists.
+
 Common possibilities:
 
 | Screen type | Typical Linux surface | Rune backend to use |
@@ -448,9 +456,22 @@ Common possibilities:
 Find the display devices Linux already exposes:
 
 ```bash
-ls -l /dev/fb*
-ls -l /dev/dri/ 2>/dev/null || true
-ls -l /dev/spidev* 2>/dev/null || true
+cd ~/src/rune/firmware/userspace/rune-ui
+./scripts/pi-display-probe.sh
+```
+
+Or run the underlying checks manually:
+
+```bash
+ls -l /dev/fb* 2>/dev/null || echo "no fbdev devices"
+ls -l /dev/dri/ 2>/dev/null || echo "no DRM devices"
+ls -l /dev/spidev* 2>/dev/null || echo "no spidev devices"
+for fb in /sys/class/graphics/fb*; do
+  test -e "$fb" || continue
+  echo "$fb: $(cat "$fb/name" 2>/dev/null || true)"
+  cat "$fb/virtual_size" 2>/dev/null || true
+  cat "$fb/bits_per_pixel" 2>/dev/null || true
+done
 dmesg | grep -Ei 'drm|fb|spi|display|panel' | tail -80
 ```
 
@@ -480,6 +501,39 @@ convert -size 480x280 xc:white \
   -fill black -pointsize 28 -gravity center \
   -annotate 0 'Rune framebuffer test' /tmp/rune-fb-test.png
 sudo fbi -T 1 -d /dev/fb1 --noverbose /tmp/rune-fb-test.png
+```
+
+If you only see `/dev/fb0`, inspect it before writing to it:
+
+```bash
+cat /sys/class/graphics/fb0/name
+cat /sys/class/graphics/fb0/virtual_size 2>/dev/null || true
+cat /sys/class/graphics/fb0/bits_per_pixel 2>/dev/null || true
+```
+
+On a headless Pi with a header LCD, `/dev/fb0` might be the LCD. On a Pi with
+HDMI active, `/dev/fb0` may be HDMI instead. The `name`, size, and what changes
+on the physical screen will tell you which one you have.
+
+Try Rune against the framebuffer that actually exists:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format rgb565
+```
+
+If the command succeeds but the image is garbled, the framebuffer probably uses
+a different pixel format. Try:
+
+```bash
+cargo run --bin rune-ui-demo -- \
+  --screen home \
+  --backend fbdev \
+  --fb /dev/fb0 \
+  --format xrgb8888
 ```
 
 If `fbi` does not support your framebuffer cleanly, use the vendor sample only

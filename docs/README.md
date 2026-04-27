@@ -19,6 +19,7 @@ Firmware is licensed AGPL-3.0. Hardware is licensed CERN-OHL-S 2.0.
 
 - [Getting Started](getting-started.md) -- Three paths into the project: back it, build it, or contribute to it.
 - [FAQ](faq.md) -- Answers to the questions people actually ask.
+- [Raspberry Pi UI Setup](development/raspberry-pi-ui-setup.md) -- Use a Pi 4 or blank Pi 5 with a header-connected LCD as a lightweight Linux target for portable UI mocking.
 
 ## Hardware
 

@@ -5,6 +5,11 @@ edition = "2021"
 license = "AGPL-3.0-only"
 description = "Portable 320x480 Rune UI renderer and animation mock"
 
+[dependencies]
+# Rasterizes the embedded DM Sans, DM Mono, and Lora outline fonts from the
+# designer mock without bringing in a browser or HTML runtime.
+ab_glyph = "0.2"
+
 [lib]
 name = "rune_ui"
 path = "src/lib.rs"

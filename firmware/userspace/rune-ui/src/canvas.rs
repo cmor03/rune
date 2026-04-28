@@ -1,11 +1,17 @@
 //! Fixed-size grayscale canvas and drawing primitives.
 
-use crate::font;
+use crate::font::{self, Face};
 
 /// Prototype portrait LCD width in pixels.
 pub const WIDTH: usize = 320;
 /// Prototype portrait LCD height in pixels.
 pub const HEIGHT: usize = 480;
+
+const QUAD_TOP: u8 = 0b0001;
+const QUAD_RIGHT: u8 = 0b0010;
+const QUAD_BOTTOM: u8 = 0b0100;
+const QUAD_LEFT: u8 = 0b1000;
+const QUAD_ALL: u8 = QUAD_TOP | QUAD_RIGHT | QUAD_BOTTOM | QUAD_LEFT;
 
 /// A grayscale color.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,6 +45,10 @@ impl Rect {
             h: self.h - amount * 2,
         }
     }
+}
+
+fn has_quadrants(mask: u8, required: u8) -> bool {
+    mask & required == required
 }
 
 /// A fixed Rune framebuffer.
@@ -77,6 +87,23 @@ impl Canvas {
         self.pixels[y * WIDTH + x] = color.0;
     }
 
+    /// Blends one antialiased pixel over the current framebuffer.
+    pub fn blend_pixel(&mut self, x: i32, y: i32, color: Color, coverage: f32) {
+        if x < 0 || y < 0 {
+            return;
+        }
+        let x = x as usize;
+        let y = y as usize;
+        if x >= WIDTH || y >= HEIGHT {
+            return;
+        }
+        let coverage = coverage.clamp(0.0, 1.0);
+        let idx = y * WIDTH + x;
+        let bg = self.pixels[idx] as f32;
+        let fg = color.0 as f32;
+        self.pixels[idx] = (bg + (fg - bg) * coverage).round().clamp(0.0, 255.0) as u8;
+    }
+
     /// Draws a filled rectangle.
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
         let x0 = rect.x.max(0) as usize;
@@ -113,10 +140,79 @@ impl Canvas {
 
     /// Draws a simple rounded panel using square pixels and clipped corners.
     pub fn panel(&mut self, rect: Rect, fill: Color, stroke: Color) {
-        self.fill_rect(Rect::new(rect.x + 3, rect.y, rect.w - 6, rect.h), fill);
-        self.fill_rect(Rect::new(rect.x, rect.y + 3, rect.w, rect.h - 6), fill);
-        self.stroke_rect(Rect::new(rect.x + 3, rect.y, rect.w - 6, rect.h), stroke);
-        self.stroke_rect(Rect::new(rect.x, rect.y + 3, rect.w, rect.h - 6), stroke);
+        self.round_panel(rect, 5, fill, stroke);
+    }
+
+    /// Draws a filled rounded rectangle.
+    pub fn fill_round_rect(&mut self, rect: Rect, radius: i32, color: Color) {
+        let radius = radius.max(0).min(rect.w / 2).min(rect.h / 2);
+        if radius == 0 {
+            self.fill_rect(rect, color);
+            return;
+        }
+        self.fill_rect(Rect::new(rect.x + radius, rect.y, rect.w - radius * 2, rect.h), color);
+        self.fill_rect(Rect::new(rect.x, rect.y + radius, rect.w, rect.h - radius * 2), color);
+        self.fill_circle(rect.x + radius, rect.y + radius, radius, color);
+        self.fill_circle(rect.x + rect.w - radius - 1, rect.y + radius, radius, color);
+        self.fill_circle(rect.x + radius, rect.y + rect.h - radius - 1, radius, color);
+        self.fill_circle(
+            rect.x + rect.w - radius - 1,
+            rect.y + rect.h - radius - 1,
+            radius,
+            color,
+        );
+    }
+
+    /// Draws a rounded rectangle outline.
+    pub fn stroke_round_rect(&mut self, rect: Rect, radius: i32, color: Color) {
+        let radius = radius.max(0).min(rect.w / 2).min(rect.h / 2);
+        if radius == 0 {
+            self.stroke_rect(rect, color);
+            return;
+        }
+        let left = rect.x;
+        let right = rect.x + rect.w - 1;
+        let top = rect.y;
+        let bottom = rect.y + rect.h - 1;
+
+        self.line(left + radius, top, right - radius, top, color);
+        self.line(left + radius, bottom, right - radius, bottom, color);
+        self.line(left, top + radius, left, bottom - radius, color);
+        self.line(right, top + radius, right, bottom - radius, color);
+        self.stroke_circle_quadrants(
+            left + radius,
+            top + radius,
+            radius,
+            color,
+            QUAD_TOP | QUAD_LEFT,
+        );
+        self.stroke_circle_quadrants(
+            right - radius,
+            top + radius,
+            radius,
+            color,
+            QUAD_TOP | QUAD_RIGHT,
+        );
+        self.stroke_circle_quadrants(
+            left + radius,
+            bottom - radius,
+            radius,
+            color,
+            QUAD_BOTTOM | QUAD_LEFT,
+        );
+        self.stroke_circle_quadrants(
+            right - radius,
+            bottom - radius,
+            radius,
+            color,
+            QUAD_BOTTOM | QUAD_RIGHT,
+        );
+    }
+
+    /// Draws a filled rounded rectangle with a rounded outline.
+    pub fn round_panel(&mut self, rect: Rect, radius: i32, fill: Color, stroke: Color) {
+        self.fill_round_rect(rect, radius, fill);
+        self.stroke_round_rect(rect, radius, stroke);
     }
 
     /// Draws a line using Bresenham rasterization.
@@ -156,24 +252,76 @@ impl Canvas {
         }
     }
 
-    /// Draws text using the built-in 5x7 uppercase bitmap font.
-    pub fn text(&mut self, x: i32, y: i32, text: &str, scale: i32, color: Color) {
-        let mut cursor = x;
-        let step = 6 * scale;
-        for ch in text.chars() {
-            if ch == '\n' {
-                cursor = x;
-                continue;
-            }
-            font::draw_char(self, cursor, y, ch, scale, color);
-            cursor += step;
-        }
+    /// Draws a circle outline.
+    pub fn stroke_circle(&mut self, cx: i32, cy: i32, radius: i32, color: Color) {
+        self.stroke_circle_quadrants(cx, cy, radius, color, QUAD_ALL);
+    }
+
+    /// Draws text using an embedded outline font.
+    pub fn text(&mut self, x: i32, y: i32, text: &str, face: Face, size: f32, color: Color) {
+        self.text_tracked(x, y, text, face, size, 0.0, color);
+    }
+
+    /// Draws text using an embedded outline font and extra letter spacing.
+    pub fn text_tracked(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        face: Face,
+        size: f32,
+        tracking: f32,
+        color: Color,
+    ) {
+        font::draw(
+            self,
+            x,
+            y,
+            text,
+            font::TextStyle::new(face, size, tracking, color),
+        );
     }
 
     /// Draws text centered around `cx`.
-    pub fn text_center(&mut self, cx: i32, y: i32, text: &str, scale: i32, color: Color) {
-        let width = text.chars().count() as i32 * 6 * scale - scale;
-        self.text(cx - width / 2, y, text, scale, color);
+    pub fn text_center(&mut self, cx: i32, y: i32, text: &str, face: Face, size: f32, color: Color) {
+        self.text_center_tracked(cx, y, text, face, size, 0.0, color);
+    }
+
+    /// Draws tracked text centered around `cx`.
+    pub fn text_center_tracked(
+        &mut self,
+        cx: i32,
+        y: i32,
+        text: &str,
+        face: Face,
+        size: f32,
+        tracking: f32,
+        color: Color,
+    ) {
+        let width = font::measure(face, text, size, tracking);
+        self.text_tracked(
+            (cx as f32 - width / 2.0).round() as i32,
+            y,
+            text,
+            face,
+            size,
+            tracking,
+            color,
+        );
+    }
+
+    /// Draws text with its right edge at `right`.
+    pub fn text_right(
+        &mut self,
+        right: i32,
+        y: i32,
+        text: &str,
+        face: Face,
+        size: f32,
+        color: Color,
+    ) {
+        let width = font::measure(face, text, size, 0.0);
+        self.text((right as f32 - width).round() as i32, y, text, face, size, color);
     }
 
     /// Applies a checker/dot texture similar to a low-power LCD/e-ink surface.
@@ -182,6 +330,45 @@ impl Canvas {
             for x in (0..WIDTH).step_by(4) {
                 let idx = y * WIDTH + x;
                 self.pixels[idx] = self.pixels[idx].saturating_sub(amount);
+            }
+        }
+    }
+
+    fn stroke_circle_quadrants(
+        &mut self,
+        cx: i32,
+        cy: i32,
+        radius: i32,
+        color: Color,
+        quadrants: u8,
+    ) {
+        let mut x = radius;
+        let mut y = 0;
+        let mut err = 0;
+        while x >= y {
+            if has_quadrants(quadrants, QUAD_TOP | QUAD_RIGHT) {
+                self.pixel(cx + x, cy - y, color);
+                self.pixel(cx + y, cy - x, color);
+            }
+            if has_quadrants(quadrants, QUAD_BOTTOM | QUAD_RIGHT) {
+                self.pixel(cx + x, cy + y, color);
+                self.pixel(cx + y, cy + x, color);
+            }
+            if has_quadrants(quadrants, QUAD_BOTTOM | QUAD_LEFT) {
+                self.pixel(cx - x, cy + y, color);
+                self.pixel(cx - y, cy + x, color);
+            }
+            if has_quadrants(quadrants, QUAD_TOP | QUAD_LEFT) {
+                self.pixel(cx - x, cy - y, color);
+                self.pixel(cx - y, cy - x, color);
+            }
+            y += 1;
+            if err <= 0 {
+                err += 2 * y + 1;
+            }
+            if err > 0 {
+                x -= 1;
+                err -= 2 * x + 1;
             }
         }
     }

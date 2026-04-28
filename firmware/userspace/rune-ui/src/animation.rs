@@ -1,6 +1,6 @@
 //! Animation timing helpers and pixel sprite data.
 
-use crate::canvas::{Canvas, Color, Rect, WIDTH};
+use crate::canvas::{Canvas, Color, Rect, HEIGHT, WIDTH};
 
 /// Render-time animation context.
 #[derive(Clone, Copy, Debug)]
@@ -21,7 +21,7 @@ impl FrameContext {
         Self {
             frame,
             total,
-            battery_pct: 81,
+            battery_pct: 72,
             selected: 0,
         }
     }
@@ -110,13 +110,14 @@ pub fn raven_wake(canvas: &mut Canvas, ctx: FrameContext, color: Color) {
     } else {
         -ctx.pulse(12, 14)
     };
-    canvas.line(0, 280, WIDTH as i32, 280, Color(48));
-    raven(canvas, x, 252 + hop, 4, ctx, color);
+    let ground_y = HEIGHT as i32 - 84;
+    canvas.line(0, ground_y, WIDTH as i32, ground_y, Color(46));
+    raven(canvas, x, ground_y - 48 + hop, 4, ctx, color);
 
     for i in 0..6 {
         let fx = x - 16 - i * 28;
-        if fx > 0 && fx < 480 {
-            canvas.fill_rect(Rect::new(fx, 214 + (i % 2) * 3, 7, 3), Color(58));
+        if fx > 0 && fx < WIDTH as i32 {
+            canvas.fill_rect(Rect::new(fx, ground_y + 22 + (i % 2) * 3, 7, 3), Color(58));
         }
     }
 }

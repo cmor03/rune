@@ -28,6 +28,22 @@ Implemented in this first pass:
 - `notifications`
 - `camera`
 
+## Build Location
+
+Rune UI Rust builds are expected to run on the target device/prototype, not on
+the macOS development host. The Mac workflow is for editing and syncing; use the
+device-side toolchain for `cargo build`, `cargo run`, `rustfmt`, and `clippy`
+unless a local Rust toolchain has been installed intentionally for a one-off
+preview.
+
+## Typography
+
+The renderer embeds the same font families used by the designer handoff:
+DM Sans for UI labels, DM Mono for numerals and compact metadata, and Lora
+Italic for the Rune wordmark and softer headings. The font files live in
+`assets/fonts/` with their OFL license text so the UI can render native text
+without HTML, a browser runtime, or pixel-font lettering.
+
 ## Render Frames
 
 From this directory:
